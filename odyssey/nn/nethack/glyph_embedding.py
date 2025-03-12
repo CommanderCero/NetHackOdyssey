@@ -37,7 +37,7 @@ def create_glyph_text_embedding(
     """
     Creates a glyph embedding using a pre-trained text embedding model.
 
-    This function generates text descriptions for glyphs and uses a pre-trained SentenceTransformer to create embeddings for these descriptions. 
+    This function uses a pre-trained SentenceTransformer to create static embeddings for glyph descriptions.
     A trainable linear layer then maps these embeddings to the final glyph embedding.
 
     Args:
