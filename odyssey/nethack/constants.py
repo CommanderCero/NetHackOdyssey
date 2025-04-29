@@ -1,3 +1,5 @@
+import nle.nethack as nh
+
 from nle.nethack import (
     # See nle/include/nleobs.h for the original definitions
     NLE_BL_HUNGER as BLSTATS_HUNGER_INDEX,
@@ -31,3 +33,10 @@ from nle.nethack import (
 
 MAP_HEIGHT = 21
 MAP_WIDTH = 79
+TTY_HEIGHT = nh.nethack.TERMINAL_SHAPE[0]
+TTY_WIDTH = nh.nethack.TERMINAL_SHAPE[1]
+
+NUM_TTY_CHARS = 255
+NUM_TTY_COLORS = 32
+
+SOLID_STONE_GLYPH = nh.GLYPH_CMAP_OFF + 0

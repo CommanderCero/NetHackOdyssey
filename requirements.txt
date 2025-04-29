@@ -1,5 +1,6 @@
 # Utils
 numpy
+pandas
 ipykernel
 tqdm
 matplotlib
@@ -13,6 +14,8 @@ minigrid
 # Machine Learning Stuff
 torch
 torchvision
-av # Required for video recording
+lightning
 torchrl
+av # Required for video recording
 sentence-transformers==3.0.0
+h5py # For storing training data

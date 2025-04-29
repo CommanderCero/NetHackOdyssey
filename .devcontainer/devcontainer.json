@@ -8,7 +8,7 @@
 		// Update the 'dockerFile' property if you aren't using the standard 'Dockerfile' filename.
 		"dockerfile": "../Dockerfile"
 	},
-	"runArgs": ["--rm", "--gpus", "all", "--cpuset-cpus", "0-1"],
+	"runArgs": ["--rm", "--gpus", "all", "--cpuset-cpus", "0-1", "--ipc=host"],
 	"workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
 	"workspaceFolder": "/workspace",
 	"forwardPorts": [8888],

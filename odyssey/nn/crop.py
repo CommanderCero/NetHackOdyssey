@@ -2,9 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import warnings
+
 class Crop2D(nn.Module):
     def __init__(self, height, width, height_target, width_target):
         super(Crop2D, self).__init__()
+
+        warnings.warn("Does not currently work", DeprecationWarning, stacklevel=2)
+
         self.width = width
         self.height = height
         self.width_target = width_target
