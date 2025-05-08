@@ -57,12 +57,11 @@ class ContextTransformer(nn.Module):
         # Initialize reusable causal mask
         # Not sure if we should include this for computing the context, since we aren't predicting anything, we just want to represent the past
         ones = torch.ones((max_trajectory_length, max_trajectory_length), dtype=bool)
-        mask = torch.tril(ones).view(1, max_trajectory_length, max_trajectory_length)
+        mask = torch.tril(ones).view(max_trajectory_length, max_trajectory_length)
         self.register_buffer('mask', mask)
     
     def forward(self,
         observations: torch.Tensor,
-        timesteps: torch.LongTensor,
         padding_mask: Optional[torch.Tensor]=None,
     ):
         B, T, E = observations.shape
@@ -70,15 +69,15 @@ class ContextTransformer(nn.Module):
         assert T <= self.max_trajectory_length, "The number of observations exceeds the maximum trajectory length"
 
         # Add positional embeddings to the observations
-        timestep_embeddings = self.timestep_embedding(timesteps)
+        # TODO Cache torch.arange
+        timestep_embeddings = self.timestep_embedding(torch.arange(T, device=observations.device)).unsqueeze(0).expand(B, T, E)
         input = observations + timestep_embeddings
 
         # Predict
         h = self.embed_ln(input)
-        mask = self.mask[:, :T, :T].expand(B, T, T)
         h = self.transformer(
             h,
-            mask=mask,
+            mask=self.mask[:T, :T],
             src_key_padding_mask=padding_mask,
             is_causal=True
         )
@@ -87,7 +86,9 @@ class ContextTransformer(nn.Module):
         if padding_mask is None:
             embeddings = torch.mean(h, dim=1)
         else:
-            embeddings = torch.sum(h * mask, dim=1) / torch.sum(mask, dim=1)
-        embeddings = self.output_fc(F.relu(embeddings))
+            # True values in the padding mask indicate padding, so we need to invert it
+            inv_pad = ~padding_mask
+            embeddings = torch.sum(h * inv_pad.unsqueeze(-1), dim=1) / torch.sum(inv_pad, dim=1, keepdim=True)
         
+        embeddings = self.output_fc(F.relu(embeddings))
         return embeddings

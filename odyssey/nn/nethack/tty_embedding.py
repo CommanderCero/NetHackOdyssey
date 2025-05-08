@@ -4,13 +4,32 @@ from odyssey.nn.nethack.char_embedding import AdditiveCharEmbedding
 import torch
 import torch.nn as nn
 
-class ResnetTTYEmbedding(nn.Module):
+from abc import ABC, abstractmethod
+
+class TTYEmbeddingBase(nn.Module, ABC):
+    def __init__(self, embedding_dim: int):
+        super().__init__()
+        self.embedding_dim = embedding_dim
+
+    # def encode(self, x):
+    #     if isinstance(x, dict):
+    #         return self.forward(x["tty_chars"], x["tty_colors"], x["tty_cursor"])
+    #     elif isinstance(x, (list, tuple)) and len(x) == 3:
+    #         return self.forward(*x)
+    #     else:
+    #         raise TypeError("Input must be a dict with keys 'tty_chars', 'tty_colors', 'tty_cursor', or a 3-tuple of tensors.")
+
+    @abstractmethod
+    def forward(self, tty_chars: torch.LongTensor, tty_colors: torch.LongTensor, tty_cursor: torch.LongTensor) -> torch.Tensor:
+        raise NotImplementedError()
+
+class ResnetTTYEmbedding(TTYEmbeddingBase):
     def __init__(self,
         embedding_dim: int,
         char_embedding_dim: int = 16,
         resnet_type="resnet11"
     ):
-        super().__init__()
+        super().__init__(embedding_dim)
         self.embedding_dim = embedding_dim
         self.char_embedding_dim = char_embedding_dim
 

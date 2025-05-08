@@ -1,4 +1,4 @@
-from odyssey.nethack.constants import TTY_HEIGHT, TTY_WIDTH, NUM_TTY_CHARS, NUM_TTY_COLORS
+from odyssey.nethack.constants import NUM_TTY_CHARS, NUM_TTY_COLORS, TTY_WIDTH, TTY_HEIGHT
 
 import torch
 import torch.nn as nn
@@ -25,9 +25,15 @@ class AdditiveCharEmbedding(nn.Module):
         embedding = tty_chars_embedding + tty_colors_embedding
 
         # Add the cursor embedding at the position of the cursor
+        # Sometimes the cursor can go out of bounds (technically only observed where x=80)
+        # So we have to do some extra work to avoid adding the embedding to invalid positions
         y = tty_cursor[..., 0]
         x = tty_cursor[..., 1]
-        embedding[torch.arange(len(embedding)), y, x] += self.cursor_embedding
+        valid_cursor_mask = (x >= 0) & (x < TTY_WIDTH) & (y >= 0) & (y < TTY_HEIGHT)
+        if valid_cursor_mask.any():
+            B, *_ = tty_cursor.shape
+            batch_indices = torch.arange(B, device=embedding.device)[valid_cursor_mask]
+            embedding[batch_indices, y[valid_cursor_mask], x[valid_cursor_mask]] += self.cursor_embedding
         return embedding
 
 
