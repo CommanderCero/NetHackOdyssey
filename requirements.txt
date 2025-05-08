@@ -19,3 +19,5 @@ torchrl
 av # Required for video recording
 sentence-transformers==3.0.0
 h5py # For storing training data
+wandb
+hydra-core
