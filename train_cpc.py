@@ -1,13 +1,13 @@
 from odyssey.nn.contrastive.context_transformer import ContextTransformer
 from odyssey.nn.contrastive.linear_list import LinearList
 from odyssey.nn.nethack.tty_embedding import TTYEmbeddingBase, ResnetTTYEmbedding
-from odyssey.data.contrastive.cpc_dataset import CPCDataset, NethackCPCBatch
-from tensordict import TensorDict
-from tensordict.nn import TensorDictModule
+from odyssey.data.contrastive.cpc_dataset import CPCDataset
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from tensordict import TensorDict, tensorclass
+from tensordict.nn import TensorDictModule
 import lightning
 from lightning.pytorch.loggers import WandbLogger
 from torchmetrics.functional import accuracy
@@ -18,53 +18,29 @@ from omegaconf import DictConfig
 import argparse
 from typing import List
 
-def info_nce_loss_accuracy(queries: torch.Tensor, positive_keys: torch.Tensor, temperature: float = 0.1, reduction="mean"):
-    """
-    Computes the InfoNCE loss.
-    Args:
-        query: The query tensor of shape (B, D).
-        positive_keys: The positive keys tensor of shape (B, D).
-        temperature: The temperature for scaling the logits.
-        reduction: The reduction method to apply to the loss.
-    Returns:
-        The InfoNCE loss.
-    """
-    queries = F.normalize(queries, dim=-1)
-    positive_keys = F.normalize(positive_keys, dim=-1)
+@tensorclass
+class TTYData:
+    tty_chars: torch.LongTensor
+    tty_colors: torch.LongTensor
+    tty_cursor: torch.LongTensor
 
-    logits = queries @ positive_keys.T
-    # The positive logits are the diagonal of the logits matrix
-    # Everything else is a negative sample
-    labels = torch.arange(len(queries), device=queries.device)
-    preds = torch.argmax(logits, dim=-1)
+@tensorclass
+class NethackCPCBatch:
+    context: TTYData
+    padding_mask: torch.BoolTensor
+    positive_samples: TTYData
+    positive_indices: torch.LongTensor
 
-    loss = F.cross_entropy(
-        logits / temperature,
-        labels,
-        reduction=reduction
-    )
-
-    acc = accuracy(preds, labels, task="multiclass", num_classes=len(queries))
-
-    return loss, acc
-
-class InfoNCELossAccuracy(nn.Module):
-    def __init__(self, query_key, positive_sample_key, temperature=0.1, reduction='mean'):
-        super().__init__()
-        self.query_key = query_key
-        self.positive_sample_key = positive_sample_key
-        self.temperature = temperature
-        self.reduction = reduction
-
-    def forward(self, batch: TensorDict):
-        return info_nce_loss_accuracy(
-            batch[self.query_key],
-            batch[self.positive_sample_key],
-            temperature=self.temperature,
-            reduction=self.reduction
+    @staticmethod
+    def from_dict(dataset: CPCDataset, batch):
+        return NethackCPCBatch(
+            context=TTYData(**batch["context"], batch_size=(dataset.batch_size, dataset.context_length)),
+            padding_mask=batch["padding_mask"],
+            positive_samples=TTYData(**batch["positive_samples"]),
+            positive_indices=batch["positive_indices"],
+            batch_size=dataset.batch_size
         )
     
-
 class CPCModel(lightning.LightningModule):
     def __init__(self,
         tty_embedding: TTYEmbeddingBase,
@@ -76,26 +52,33 @@ class CPCModel(lightning.LightningModule):
         self.context_embedding = context_embedding
         self.future_obs_predictor = future_obs_predictor
 
-        self.save_hyperparameters()
+        # self.save_hyperparameters()
 
     def forward(self, batch: NethackCPCBatch):
-        batch["positive_samples"] = self.obs_embedding(batch["positive_samples"])
-        batch["context"] = self.embed_context_obs(batch["context"])
-        batch = self.context_embedding(batch)
-        batch = self.future_obs_predictor(batch)
+        positive_samples = self.embed_obs(batch.positive_samples)
 
-        return batch
+        # The context is a sequence of observations
+        # We first flatten it and after embedding them turn it back into sequences
+        B, T, *S = batch.context.shape
+        context = batch.context.reshape(-1, *S)
+        context = self.embed_obs(context)
+        context = context.reshape(B, T, -1)
+
+        context_embedding = self.context_embedding(context, batch.padding_mask)
+        
+        positive_preds = self.future_obs_predictor(context_embedding, batch.positive_indices)
+        return positive_samples, positive_preds
     
-    def embed_context_obs(self, context):
-        B, T, *C = context.shape
-        context = context.reshape(-1, *C)
-        context = self.obs_embedding(context)
-        context = context.reshape(B, T, *C)
-        return context
+    def embed_obs(self, batch: TTYData):
+        return self.tty_embedding(
+            tty_chars=batch.tty_chars,
+            tty_colors=batch.tty_colors,
+            tty_cursor=batch.tty_cursor
+        )
 
     def training_step(self, batch: NethackCPCBatch):
-        batch = self(batch)
-        loss, acc = self.loss_accuracy_fn(batch)
+        positive_samples, positive_preds = self(batch)
+        loss, acc = self.compute_loss_and_accuracy(positive_preds, positive_samples)
 
         self.log("loss", loss, prog_bar=True)
         self.log("accuracy", acc, prog_bar=True)
@@ -104,7 +87,8 @@ class CPCModel(lightning.LightningModule):
 
     @torch.no_grad()
     def validation_step(self, batch: NethackCPCBatch):
-        batch = self(batch)
+        positive_samples, positive_preds = self(batch)
+        loss, acc = self.compute_loss_and_accuracy(positive_preds, positive_samples)
 
         self.log("val_loss", loss)
         self.log("val_accuracy", acc)
@@ -175,7 +159,8 @@ def main(cfg: DictConfig):
         batch_size=cfg.batch_size,
         context_length=cfg.context_length,
         future_length=cfg.future_length,
-        samples_per_trajectory=cfg.samples_per_trajectory
+        samples_per_trajectory=cfg.samples_per_trajectory,
+        collate_fn=lambda x: NethackCPCBatch.from_dict(train_dataset, x)
     )
 
     train_loader = torch.utils.data.DataLoader(
@@ -189,14 +174,10 @@ def main(cfg: DictConfig):
         dataset=test_dataset,
         batch_size=None,
         num_workers=2,
-        pin_memory=True
+        pin_memory=True,
+        collate_fn=lambda x: NethackCPCBatch.from_dict(test_dataset, x)
     )
 
-    # Loss
-    loss_accuracy_fn = InfoNCELossAccuracy(
-        query_key="obs_preds",
-        positive_sample_key=("positive_samples", "obs_embedding"),
-    )
 
     # Model
     model = CPCModel(
