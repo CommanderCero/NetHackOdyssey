@@ -6,21 +6,6 @@ import numpy as np
 import h5py
 import math
 
-from tensordict import tensorclass
-
-@tensorclass
-class TTYData:
-    tty_chars: torch.LongTensor
-    tty_colors: torch.LongTensor
-    tty_cursor: torch.LongTensor
-
-@tensorclass
-class NethackCPCBatch:
-    context: TTYData
-    padding_mask: torch.BoolTensor
-    positive_samples: TTYData
-    positive_indices: torch.LongTensor
-
 def mixed_dtype_to_dict(data: np.ndarray):
     """
     Convert a mixed dtype numpy array to a dictionary.
@@ -78,7 +63,7 @@ class CPCDataset(data.IterableDataset):
         self.data_dtype = self.data[self.valid_trajectory_keys[0]].dtype
         self.data_shape = self.data[self.valid_trajectory_keys[0]].shape
 
-    def __iter__(self) -> CPCBatch:
+    def __iter__(self):
         while True:
             X = np.zeros((self.batch_size, self.context_length, *self.data_shape[1:]), dtype=self.data_dtype)
             X_padding_mask = np.zeros((self.batch_size, self.context_length), dtype=bool)
@@ -96,13 +81,12 @@ class CPCDataset(data.IterableDataset):
                 y[i] = data_slice[context_length+offset]
                 y_indices[i] = offset
 
-            yield CPCBatch(
-                context=TTYData(**mixed_dtype_to_dict(X), batch_size=(self.batch_size, self.context_length)),
-                padding_mask=X_padding_mask,
-                positive_samples=TTYData(**mixed_dtype_to_dict(y), batch_size=(self.batch_size)),
-                positive_indices=y_indices,
-                batch_size=self.batch_size
-            )
+            yield {
+                "context": mixed_dtype_to_dict(X),
+                "padding_mask": X_padding_mask,
+                "positive_samples": mixed_dtype_to_dict(y),
+                "positive_indices": y_indices
+            }
 
     def generate_batch_slices(self):
         """
