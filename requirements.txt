@@ -4,6 +4,7 @@ pandas
 ipykernel
 tqdm
 matplotlib
+rich
 
 # OpenAI Gym
 gym==0.21.0

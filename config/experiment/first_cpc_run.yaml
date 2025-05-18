@@ -1,0 +1,22 @@
+# @package _global_
+
+defaults:
+  - override /data: cpc
+  - override /model: cpc
+  - override /callbacks: default
+  - override /trainer: gpu
+  - override /paths: apocrita
+
+trainer:
+  min_epochs: 10
+  max_epochs: 100
+
+data:
+  batch_size: 64
+  num_workers: 2
+
+logger:
+  wandb:
+    tags: ${tags}
+    group: "cpc"
+    name: "first_cpc_run"

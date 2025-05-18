@@ -1,0 +1,19 @@
+defaults:
+  - _self_
+  - hydra: default
+  - paths: default
+  - trainer: default
+  - model: cpc
+  - data: cpc
+  - logger: wandb
+  - callbacks: default
+  - experiment: null
+
+tags: ["cpc"]
+task_name: "train_cpc"
+
+context_length: 100
+future_length: 30
+
+steps_per_epoch: 100
+validation_steps: 50

@@ -1,6 +1,6 @@
 # My Stuff
 cache/
-devcontainer.env
+*.env
 data/nld_nao/
 data/*.h5
 data/*.db

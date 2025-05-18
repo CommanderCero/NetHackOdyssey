@@ -57,7 +57,7 @@ class ContextTransformer(nn.Module):
         # Initialize reusable causal mask
         # Not sure if we should include this for computing the context, since we aren't predicting anything, we just want to represent the past
         ones = torch.ones((max_trajectory_length, max_trajectory_length), dtype=bool)
-        mask = torch.tril(ones).view(max_trajectory_length, max_trajectory_length)
+        mask = torch.triu(ones, diagonal=1).view(max_trajectory_length, max_trajectory_length)
         self.register_buffer('mask', mask)
     
     def forward(self,
