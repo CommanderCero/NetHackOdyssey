@@ -13,6 +13,7 @@ import os
 import h5py
 import random
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 NLD_NAO_BASE_URL = "https://dl.fbaipublicfiles.com/nld/nld-nao"
 NLD_NAO_SUFFIXES = [
@@ -23,27 +24,33 @@ NLD_NAO_SUFFIXES = [
     "xlogfiles"
 ]
 
+def download_and_extract(suffix, output_dir, position):
+    url = f"{NLD_NAO_BASE_URL}/nld-nao-{suffix}.zip"
+    with requests.get(url, stream=True) as response:
+        response.raise_for_status()
+        total = int(response.headers.get('content-length', 0))
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file, \
+             tqdm(total=total, unit='B', unit_scale=True, desc=f"{suffix}", position=position, leave=True) as pbar:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    tmp_file.write(chunk)
+                    pbar.update(len(chunk))
+            tmp_file_path = tmp_file.name
+
+    with zipfile.ZipFile(tmp_file_path, 'r') as zip_ref:
+        zip_ref.extractall(output_dir)
+
+    os.remove(tmp_file_path)
+
 def download_nld_nao_datasets(output_dir, suffixes=NLD_NAO_SUFFIXES):
     os.makedirs(output_dir, exist_ok=True)
-
-    for suffix in suffixes:
-        url = f"{NLD_NAO_BASE_URL}/nld-nao-{suffix}.zip"
-        with requests.get(url, stream=True) as response:
-            response.raise_for_status()
-            total = int(response.headers.get('content-length', 0))
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file, \
-                 tqdm(total=total, unit='B', unit_scale=True, desc=f"Downloading {url}...") as pbar:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        tmp_file.write(chunk)
-                        pbar.update(len(chunk))
-                tmp_file_path = tmp_file.name
-
-        print(f"Extracting nld-nao-{suffix}.zip to {output_dir}...")
-        with zipfile.ZipFile(tmp_file_path, 'r') as zip_ref:
-            zip_ref.extractall(output_dir)
-
-        os.remove(tmp_file_path)
+    with ThreadPoolExecutor() as executor:
+        futures = [
+            executor.submit(download_and_extract, suffix, output_dir, idx)
+            for idx, suffix in enumerate(suffixes)
+        ]
+        for future in futures:
+            future.result()
 
 def load_game_data(dataset: nld.TtyrecDataset, game_id: int, load_keys=["tty_chars", "tty_colors", "tty_cursor"]) -> dict:
     steps = dataset.get_ttyrec(game_id, 1)[:-1]
@@ -186,7 +193,7 @@ class CPCDataModule(LightningDataModule):
     
 if __name__ == "__main__":
     data_module = CPCDataModule(
-        data_dir="/workspace/data",
+        data_dir="/workspace/test_data",
         context_length=100,
         future_length=30,
         batch_size=32,
