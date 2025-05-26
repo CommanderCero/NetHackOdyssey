@@ -7,10 +7,8 @@ matplotlib
 rich
 
 # OpenAI Gym
-gym==0.21.0
 nle
 gymnasium<1.0.0 # TorchRL currently does not support gymnasium 1.0.0
-minigrid
 
 # Machine Learning Stuff
 torch
@@ -21,4 +19,3 @@ av # Required for video recording
 sentence-transformers==3.0.0
 h5py # For storing training data
 wandb
-hydra-core

@@ -4,6 +4,7 @@ import torch
 from lightning import LightningDataModule
 
 import nle.dataset as nld
+from nle.dataset.dataset import _ttyrec_generator, TtyrecDataset
 
 import numpy as np
 import requests
@@ -13,7 +14,8 @@ import os
 import h5py
 import random
 from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from pathlib import Path
 
 NLD_NAO_BASE_URL = "https://dl.fbaipublicfiles.com/nld/nld-nao"
 NLD_NAO_SUFFIXES = [
@@ -52,35 +54,147 @@ def download_nld_nao_datasets(output_dir, suffixes=NLD_NAO_SUFFIXES):
         for future in futures:
             future.result()
 
-def load_game_data(dataset: nld.TtyrecDataset, game_id: int, load_keys=["tty_chars", "tty_colors", "tty_cursor"]) -> dict:
-    steps = dataset.get_ttyrec(game_id, 1)[:-1]
-    assert all(step["gameids"][0, 0] == game_id for step in steps), "Game ID mismatch"
+def create_ttyrec_generator(
+    dataset: TtyrecDataset,
+    game_id: int,
+    batch_size: int = 1,
+    seq_length: int = 1
+):
+    """
+    Creates an ttyrec generator for a single game.
+    Avoids the out-of-memory errors with dataset.get_ttyrec which collects all batches at once.
+    """
+    load_fn = dataset._make_load_fn([game_id])
+    iter = _ttyrec_generator(
+        batch_size=batch_size,
+        seq_length=seq_length,
+        rows=dataset.rows,
+        cols=dataset.cols,
+        load_fn=load_fn,
+        map_fn=dataset._map,
+        ttyrec_version=dataset._ttyrec_version,
+    )
+    return iter
 
-    data = {
-        key: np.stack([step[key].squeeze() for step in steps])
-        for key in load_keys
-    }
+def add_game_to_h5(
+    dataset: TtyrecDataset,
+    file: h5py.File,
+    game_id: int,
+    chunk_size: int,
+    compression_type: str = "gzip",
+    keys=["tty_chars", "tty_colors", "tty_cursor"],
+    batch_size: int = 1024
+) -> h5py.Dataset:
+    """
+    Adds a single game as a dataset to an HDF5 file.
+    Returns the created dataset.
+
+    Implemented very weirdly, but it works (I think).
+    """
+    # Use example batch to determine dtype
+    batch = next(create_ttyrec_generator(dataset=dataset, game_id=game_id))
     dtype = np.dtype([
-        (key, arr.dtype, arr.shape[1:])
-        for key, arr in data.items()
+        (key, arr.dtype, arr.shape[2:]) # Shape without batch_size and sequence_length
+        for key, arr in batch.items()
+        if key in keys
     ])
-    return np.rec.fromarrays(data.values(), names=list(data.keys()), dtype=dtype)
 
-def write_games_to_h5(game_ids, dataset: nld.TtyrecDataset, output_path, chunk_size, compression_type, desc):
+    def prep_batch(batch):
+        # Compute batch_size as the ttyrec_generator adds padding at the end
+        curr_batch_size = (batch["gameids"] != 0).sum()
+
+        data = np.zeros(curr_batch_size, dtype=dtype)
+        for key in keys:
+            data[key] = batch[key][0, :curr_batch_size]
+        
+        return data
+
+    # Initialize dataset with resizeable shape
+    # We use the number of turns as an estimate for how much space we need
+    turns = dataset.get_meta(game_id)["turns"]
+    ds = file.create_dataset(
+        name=str(game_id),
+        shape=(turns,),
+        dtype=dtype,
+        compression=compression_type,
+        chunks=(chunk_size,),
+        maxshape=(None,)
+    )
+
+    # Add batches
+    offset = 0
+    for batch in create_ttyrec_generator(dataset=dataset, game_id=game_id, seq_length=batch_size):
+        batch = prep_batch(batch)
+        end = offset + batch.shape[0]
+        if end > ds.shape[0]:
+            ds.resize((end + turns,))
+        ds[offset:end] = batch
+        offset = end
+    ds.resize((offset,))  # Resize to the actual size
+
+    return ds
+
+def write_games_to_h5(game_ids, dataset: nld.TtyrecDataset, output_path, chunk_size, compression_type):
     with h5py.File(output_path, "w") as file:
-        for game_id in tqdm(game_ids, desc=desc):
-            metadata = dataset.get_meta(game_id)
-            game_data = load_game_data(dataset, game_id)
-            chunk_size = min(chunk_size, len(game_data))
-
-            ds = file.create_dataset(
-                name=str(game_id),
-                data=game_data,
-                compression=compression_type,
-                chunks=(chunk_size,),
-                maxshape=(None,)
+        for game_id in game_ids:
+            ds = add_game_to_h5(
+                dataset=dataset,
+                file=file,
+                game_id=game_id,
+                chunk_size=chunk_size,
+                compression_type=compression_type
             )
-            ds.attrs.update(metadata)
+            metadata = dataset.get_meta(game_id)
+            ds.attrs.update(dict(metadata))
+            # Add player name using paths (As metadata.name (ingame name) might be different from the player name)
+            paths = dataset.get_paths(game_id)
+            names = [Path(path).parent.name for path in paths]
+            assert len(set(names)) == 1, "Found multiple names for same player"
+            ds.attrs["player_name"] = names[0]
+
+
+def _write_part(part_id, part_game_ids, dataset_path, output_dir, prefix, chunk_size, compression_type):
+    dataset = nld.TtyrecDataset("nld-nao-v0", batch_size=1, seq_length=1, dbfilename=dataset_path)
+    out_path = os.path.join(output_dir, f"{prefix}_part{part_id}.h5")
+    write_games_to_h5(
+        part_game_ids,
+        dataset,
+        out_path,
+        chunk_size,
+        compression_type
+    )
+    return out_path
+
+def write_games_to_h5_parallel(game_ids, dataset, output_dir, prefix, chunk_size, compression_type, num_workers=8):
+    os.makedirs(output_dir, exist_ok=True)
+    dataset_path = dataset.dbfilename
+    shard_ids = np.array_split(game_ids, num_workers)
+
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        futures = [
+            executor.submit(
+                _write_part,
+                idx,
+                shard.tolist(),
+                dataset_path,
+                output_dir,
+                prefix,
+                chunk_size,
+                compression_type
+            )
+            for idx, shard in enumerate(shard_ids) if len(shard) > 0
+        ]
+        part_paths = [f.result() for f in futures]
+    
+    return part_paths
+
+def create_virtual_dataset(vds_path, part_paths):
+    with h5py.File(vds_path, 'w', libver='latest') as vfile:
+        for part_path in part_paths:
+            relative_path = os.path.relpath(part_path, os.path.dirname(vds_path))
+            with h5py.File(part_path, 'r') as part_file:
+                for game_id in part_file:
+                    vfile[game_id] = h5py.ExternalLink(relative_path, f"/{game_id}")
 
 class CPCDataModule(LightningDataModule):
     def __init__(
@@ -124,8 +238,18 @@ class CPCDataModule(LightningDataModule):
             train_ids = game_ids[self.hparams.num_test_samples:]
 
             chunk_size = (self.hparams.future_length + self.hparams.context_length) * 2
-            write_games_to_h5(train_ids, dataset, self.train_file, chunk_size, "gzip", "Writing train set")
-            write_games_to_h5(test_ids, dataset, self.test_file, chunk_size, "gzip", "Writing test set")
+            
+            # Parallelize geenerating the train dataset
+            print(f"Generating {self.train_file}...")
+            train_parts = write_games_to_h5_parallel(
+                train_ids, dataset, os.path.join(self.hparams.data_dir, "train_parts"), "train",
+                chunk_size=chunk_size, compression_type="gzip"
+            )
+            create_virtual_dataset(self.train_file, train_parts)
+
+            # Test data shouldnt be much, so we do not parallelize it
+            print(f"Generating {self.test_file}...")
+            write_games_to_h5(test_ids, dataset, self.test_file, chunk_size, "gzip")
 
     def train_dataloader(self):
         dataset = CPCDataset(
@@ -174,26 +298,11 @@ class CPCDataModule(LightningDataModule):
     @property
     def test_file(self):
         return os.path.join(self.hparams.data_dir, "nld_nao_test.h5")
-    
-    def _prepare_datasets(self):
-        nld.db.create()
-        nld.add_altorg_directory(self.data_dir, "nld-nao-v0")
-
-        dataset = nld.TtyrecDataset("nld-nao-v0", batch_size=1, seq_length=1)
-        game_ids = list(dataset._gameids)
-        random.seed(self.seed)
-        random.shuffle(game_ids)
-
-        test_ids = game_ids[:self.test_samples]
-        train_ids = game_ids[self.test_samples:]
-
-        write_games_to_h5(train_ids, dataset, self.train_output_h5, self.chunk_size, self.compression_type, "Writing train set")
-        write_games_to_h5(test_ids, dataset, self.test_output_h5, self.chunk_size, self.compression_type, "Writing test set")
 
     
 if __name__ == "__main__":
     data_module = CPCDataModule(
-        data_dir="/workspace/test_data",
+        data_dir="/workspace/data",
         context_length=100,
         future_length=30,
         batch_size=32,
@@ -203,3 +312,7 @@ if __name__ == "__main__":
     )
 
     data_module.prepare_data()
+
+    for batch in data_module.train_dataloader():
+        print(batch)
+        break

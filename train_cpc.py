@@ -13,6 +13,11 @@ from typing import List, Dict
 @hydra.main(config_path="config", config_name="train_cpc", version_base="1.3")
 def main(cfg: DictConfig):
     datamodule: CPCDataModule = hydra.utils.instantiate(cfg.data)
+    if cfg.prepare_data_only:
+        print("prepare_data_only flag is set to True. Only preparing data...")
+        datamodule.prepare_data()
+        return
+
     model: CPCModel = hydra.utils.instantiate(cfg.model)
     logger: Logger = hydra.utils.instantiate(cfg.logger)
     callbacks: Dict[str, Callback] = hydra.utils.instantiate(cfg.callbacks)

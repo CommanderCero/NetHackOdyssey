@@ -6,17 +6,17 @@ defaults:
   - override /callbacks: default
   - override /trainer: gpu
   - override /paths: apocrita
+  - override /logger: wandb
 
 trainer:
   min_epochs: 10
-  max_epochs: 100
+  max_epochs: 1000
 
 data:
   batch_size: 64
-  num_workers: 2
+  num_workers: 4
 
 logger:
-  wandb:
-    tags: ${tags}
-    group: "cpc"
-    name: "first_cpc_run"
+  tags: ${tags}
+  group: "cpc"
+  name: "first_cpc_run"
