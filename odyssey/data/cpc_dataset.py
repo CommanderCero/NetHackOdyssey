@@ -5,6 +5,7 @@ import numpy as np
 
 import h5py
 import math
+from typing import Callable, Optional
 
 def mixed_dtype_to_dict(data: np.ndarray):
     """
@@ -36,7 +37,9 @@ class CPCDataset(data.IterableDataset):
         batch_size: int,
         context_length: int,
         future_length: int,
-        samples_per_trajectory: int
+        samples_per_trajectory: int,
+        seed: int = None,
+        transform: Optional[Callable]=None
     ):
         """
         Args:
@@ -45,6 +48,8 @@ class CPCDataset(data.IterableDataset):
             context_length (int): Maximum length of the context sequence.
             future_length (int): Maximum offset into the future for sampling a positive observation.
             samples_per_trajectory (int): Number of samples per trajectory. Having more samples of the same trajectory in a batch should increase the amount of difficult negative samples.
+            seed (int, optional): Random seed for reproducibility. Defaults to None.
+            transform (Callable, optional): Optional transform to be applied on the data. Defaults to None.
         """
         super().__init__()
         self.data = h5py.File(h5py_file_path, 'r')
@@ -52,6 +57,8 @@ class CPCDataset(data.IterableDataset):
         self.context_length = context_length
         self.future_length = future_length
         self.samples_per_trajectory = samples_per_trajectory
+        self.seed = seed
+        self.transform = transform
 
         self.valid_trajectory_keys = [
             key
@@ -64,13 +71,15 @@ class CPCDataset(data.IterableDataset):
         self.data_shape = self.data[self.valid_trajectory_keys[0]].shape
 
     def __iter__(self):
+        rng = np.random.default_rng(self.seed)
+
         while True:
             X = np.zeros((self.batch_size, self.context_length, *self.data_shape[1:]), dtype=self.data_dtype)
             X_padding_mask = np.zeros((self.batch_size, self.context_length), dtype=bool)
             y = np.zeros((self.batch_size, *self.data_shape[1:]), dtype=self.data_dtype)
             y_indices = np.zeros((self.batch_size,), dtype=int)
 
-            slices = self.generate_batch_slices()
+            slices = self.generate_batch_slices(rng)
             for i, (key, start, end, offset) in enumerate(slices):
                 context_length = end - start
                 data_slice = self.data[key][start:end+offset+1] # Load only once, which should be more efficient if the used chunk size is larger than context_length + future_length.
@@ -81,14 +90,19 @@ class CPCDataset(data.IterableDataset):
                 y[i] = data_slice[context_length+offset]
                 y_indices[i] = offset
 
-            yield {
+            data = {
                 "context": mixed_dtype_to_dict(X),
                 "padding_mask": X_padding_mask,
                 "positive_samples": mixed_dtype_to_dict(y),
                 "positive_indices": y_indices
             }
 
-    def generate_batch_slices(self):
+            if self.transform is not None:
+                data = self.transform(data)
+            
+            yield data
+
+    def generate_batch_slices(self, rng: np.random.Generator):
         """
         This function samples a batch of slices, ensuring no positive sample is returned more than once per batch.
         Each slice is a tuple of (trajectory_key, start, end, offset).
@@ -97,17 +111,13 @@ class CPCDataset(data.IterableDataset):
         Note that end is not inclusive, meaning when offset is 0, the positive index equals end
         """
         num_key_samples = math.ceil(self.batch_size / self.samples_per_trajectory)
-        trajectory_keys = np.random.choice(self.valid_trajectory_keys, num_key_samples, replace=False)
+        trajectory_keys = rng.choice(self.valid_trajectory_keys, num_key_samples, replace=False)
         slices = []
+
         for key in trajectory_keys:
-            # [S....E..X..F] (S=start, E=end, X=positive_sample, F=end+future_length)
-            # We want to sample start, end, and offset for the positive sample.
-            # We start by sampling the positive index (X), and ensure that we do not sample the same index multiple times.
-            # We then go backwards by subtracting a random offset, ensuring we always have one observation in the context.
-            # We do not need negative samples, as we use all other positive samples as negative samples.
             num_samples = min(self.batch_size - len(slices), self.samples_per_trajectory)
-            positive_indices = np.random.choice(range(1, len(self.data[key])), num_samples, replace=False)
-            offsets = np.random.randint(0, np.minimum(positive_indices, self.future_length))
+            positive_indices = rng.choice(range(1, len(self.data[key])), num_samples, replace=False)
+            offsets = rng.integers(0, np.minimum(positive_indices, self.future_length))
             ends = positive_indices - offsets
             starts = np.maximum(ends - self.context_length, 0)
 
@@ -115,6 +125,7 @@ class CPCDataset(data.IterableDataset):
                 (key, start, end, offset)
                 for start, end, offset in zip(starts, ends, offsets)
             )
+
         return slices
 
 if __name__ == "__main__":

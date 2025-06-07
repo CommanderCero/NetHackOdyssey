@@ -26,7 +26,6 @@ def main(cfg: DictConfig):
         logger=logger,
         callbacks=list(callbacks.values())
     )
-    
 
     # Train
     trainer.fit(

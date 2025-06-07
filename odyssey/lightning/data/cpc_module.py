@@ -1,4 +1,5 @@
 from odyssey.data.cpc_dataset import CPCDataset
+from odyssey.nethack.tty_utils import censor_bottom_bar
 
 import torch
 from lightning import LightningDataModule
@@ -206,7 +207,9 @@ class CPCDataModule(LightningDataModule):
         num_test_samples: int = 50,
         samples_per_trajectory: int = 10,
         num_workers: int = 0,
-        nld_nao_suffixes = NLD_NAO_SUFFIXES
+        nld_nao_suffixes = NLD_NAO_SUFFIXES,
+        val_dataset_seed = None,
+        bottom_bar_censor_ratio: float = None
     ):
         super().__init__()
 
@@ -239,7 +242,7 @@ class CPCDataModule(LightningDataModule):
 
             chunk_size = (self.hparams.future_length + self.hparams.context_length) * 2
             
-            # Parallelize geenerating the train dataset
+            # Parallelize generating the train dataset
             print(f"Generating {self.train_file}...")
             train_parts = write_games_to_h5_parallel(
                 train_ids, dataset, os.path.join(self.hparams.data_dir, "train_parts"), "train",
@@ -251,36 +254,54 @@ class CPCDataModule(LightningDataModule):
             print(f"Generating {self.test_file}...")
             write_games_to_h5(test_ids, dataset, self.test_file, chunk_size, "gzip")
 
-    def train_dataloader(self):
-        dataset = CPCDataset(
-            self.train_file,
-            batch_size=self.hparams.batch_size,
-            context_length=self.hparams.context_length,
-            future_length=self.hparams.future_length,
-            samples_per_trajectory=self.hparams.samples_per_trajectory,
-        )
+    def setup(self, stage):
+        transform = None
+        if self.hparams.bottom_bar_censor_ratio:
+            transform = self.censor_bottom_bar_transform
 
+        kwargs = {
+            "batch_size": self.hparams.batch_size,
+            "context_length": self.hparams.context_length,
+            "future_length": self.hparams.future_length,
+            "samples_per_trajectory": self.hparams.samples_per_trajectory,
+            "transform": transform
+        }
+
+        self.train_dataset = CPCDataset(self.train_file, **kwargs)
+
+        kwargs["seed"] = self.hparams.val_dataset_seed
+        self.val_dataset = CPCDataset(self.test_file, **kwargs)
+
+
+    def train_dataloader(self):
         return torch.utils.data.DataLoader(
-            dataset=dataset,
+            dataset=self.train_dataset,
             batch_size=None,
             num_workers=self.hparams.num_workers,
             pin_memory=True
         )
 
     def val_dataloader(self):
-        dataset = CPCDataset(
-            self.test_file,
-            batch_size=self.hparams.batch_size,
-            context_length=self.hparams.context_length,
-            future_length=self.hparams.future_length,
-            samples_per_trajectory=self.hparams.samples_per_trajectory,
-        )
-
         return torch.utils.data.DataLoader(
-            dataset=dataset,
+            dataset=self.val_dataset,
             batch_size=None,
             num_workers=self.hparams.num_workers,
             pin_memory=True
+        )
+    
+    def censor_bottom_bar_transform(self, data):
+        censor_bottom_bar(
+            tty_chars=data["context"]["tty_chars"],
+            tty_colors=data["context"]["tty_colors"],
+            censor_ratio=self.hparams.bottom_bar_censor_ratio,
+            inplace=True,
+        )
+
+        censor_bottom_bar(
+            tty_chars=data["positive_samples"]["tty_chars"],
+            tty_colors=data["positive_samples"]["tty_colors"],
+            censor_ratio=self.hparams.bottom_bar_censor_ratio,
+            inplace=True
         )
     
     @property
@@ -298,21 +319,5 @@ class CPCDataModule(LightningDataModule):
     @property
     def test_file(self):
         return os.path.join(self.hparams.data_dir, "nld_nao_test.h5")
-
     
-if __name__ == "__main__":
-    data_module = CPCDataModule(
-        data_dir="/workspace/data",
-        context_length=100,
-        future_length=30,
-        batch_size=32,
-        num_test_samples=50,
-        samples_per_trajectory=10,
-        num_workers=0
-    )
-
-    data_module.prepare_data()
-
-    for batch in data_module.train_dataloader():
-        print(batch)
-        break
+    

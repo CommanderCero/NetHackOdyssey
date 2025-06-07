@@ -9,7 +9,12 @@
             "program": "${file}",
             "cwd": "${fileDirname}",
             "console": "integratedTerminal",
-            "justMyCode": false
-        },
+            "justMyCode": false,
+            "args": [
+                "experiment=02b_increase_sample_difficulty",
+                "paths=default",
+                "logger.offline=True"
+            ]
+        }
     ]
 }

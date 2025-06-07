@@ -1,9 +1,8 @@
 # My Stuff
 cache/
 *.env
-data/nld_nao/
-data/*.h5
-data/*.db
+data/
+logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

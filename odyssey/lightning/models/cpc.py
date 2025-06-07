@@ -1,6 +1,6 @@
 from odyssey.nn.contrastive.context_transformer import ContextTransformer
 from odyssey.nn.contrastive.linear_list import LinearList
-from odyssey.nn.nethack.tty_embedding import TTYEmbeddingBase
+from odyssey.nn.nethack.tty_encoder import TTYEncoderBase
 
 import torch
 import torch.nn.functional as F
@@ -45,7 +45,7 @@ class NethackCPCBatch:
     
 class CPCModel(lightning.LightningModule):
     def __init__(self,
-        tty_embedding: TTYEmbeddingBase,
+        tty_embedding: TTYEncoderBase,
         context_embedding: ContextTransformer,
         future_obs_predictor: LinearList
     ):

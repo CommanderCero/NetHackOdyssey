@@ -6,4 +6,3 @@ batch_size: 32
 num_test_samples: 500
 samples_per_trajectory: 10
 num_workers: 0
-# nld_nao_suffixes: ["dir-aa", "xlogfiles"]

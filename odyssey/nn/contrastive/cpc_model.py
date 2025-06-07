@@ -48,7 +48,7 @@ def odyssey_cpc_model(
     hidden_size: int = 512,
     num_heads: int = 8,
 ) -> CPCModel:
-    from odyssey.nn.nethack.tty_embedding import ResnetTTYEmbedding
+    from odyssey.nn.nethack.tty_encoder import ResnetTTYEmbedding
     from odyssey.nn.contrastive.context_transformer import ContextTransformer
     from odyssey.nn.contrastive.linear_list import LinearList
 

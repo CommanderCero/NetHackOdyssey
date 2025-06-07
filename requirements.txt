@@ -5,6 +5,7 @@ ipykernel
 tqdm
 matplotlib
 rich
+hydra-core
 
 # OpenAI Gym
 nle
@@ -19,3 +20,4 @@ av # Required for video recording
 sentence-transformers==3.0.0
 h5py # For storing training data
 wandb
+captum # Analysis library
