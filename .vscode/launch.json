@@ -13,7 +13,8 @@
             "args": [
                 "experiment=02b_increase_sample_difficulty",
                 "paths=default",
-                "logger.offline=True"
+                "logger.offline=True",
+                "data.num_workers=0"
             ]
         }
     ]

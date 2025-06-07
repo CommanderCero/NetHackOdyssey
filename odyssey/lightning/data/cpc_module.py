@@ -303,6 +303,8 @@ class CPCDataModule(LightningDataModule):
             censor_ratio=self.hparams.bottom_bar_censor_ratio,
             inplace=True
         )
+
+        return data
     
     @property
     def db_file(self):
