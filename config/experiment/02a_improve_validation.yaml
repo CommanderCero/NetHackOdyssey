@@ -10,12 +10,12 @@ defaults:
 
 trainer:
   min_epochs: 10
-  max_epochs: 1000
+  max_epochs: 2000
 
 logger:
   tags: ${tags}
   group: "cpc"
-  name: "02a_improve_validation_run"
+  name: "02a_improve_validation"
 
 data:
   batch_size: 64
@@ -23,8 +23,7 @@ data:
   # NEW: Add a seed to ensure we return the same validation data each epoch
   val_dataset_seed: 42
 
-# NEW: By default we use val_accuracy, but it seems to make more sense to use val_loss
-# NEW: As accuracy could converge while loss is still decreasing (Aka model is learning to be more confident)
-early_stopping:
-  monitor: "val_loss"
-  mode: "min"
+callbacks:
+  model_checkpoint:
+    # Instead of early stopping, we save more checkpoints
+    save_top_k: 5

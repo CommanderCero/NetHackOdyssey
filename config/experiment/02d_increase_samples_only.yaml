@@ -15,20 +15,16 @@ trainer:
 logger:
   tags: ${tags}
   group: "cpc"
-  name: "02a_increase_sample_difficulty"
+  name: "02d_increase_samples_only"
 
 data:
   batch_size: 64
   num_workers: 4
   # Add a seed to ensure we return the same validation data each epoch
   val_dataset_seed: 42
-  # NEW: Increase the samples per trajectory.
-  # NEW: This should make it more difficult due to the environment often looking very similiar
-  # NEW: Hopefully resulting in better embeddings that focus on tiny details
   samples_per_trajectory: 48
-  # NEW: Partially censor the bottom bar to force the model to learn more about the environment
-  # NEW: As the player name, time, and score could be easily used to distinguish between trajectories
-  bottom_bar_censor_ratio: 0.5
+  # NEW: Do not censor the bottom bar, to see samples_per_trajectory impact in isolation
+  # bottom_bar_censor_ratio: 0.5
 
 callbacks:
   model_checkpoint:

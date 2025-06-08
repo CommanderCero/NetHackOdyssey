@@ -2,7 +2,6 @@ defaults:
   - model_checkpoint
   - rich_model_summary
   - rich_progress_bar
-  - early_stopping
   - _self_
 
 model_checkpoint:
@@ -12,11 +11,6 @@ model_checkpoint:
   mode: "max"
   save_last: True
   auto_insert_metric_name: False
-
-early_stopping:
-  monitor: "val_accuracy"
-  patience: 100
-  mode: "max"
 
 rich_model_summary:
   max_depth: -1
