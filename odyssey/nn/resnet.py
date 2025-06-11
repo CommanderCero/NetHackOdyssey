@@ -109,17 +109,37 @@ class ResNet(nn.Module):
 
         return x
 
-def resnet11(img_channels, out_dim, k=1):
+def resnet11(img_channels, out_dim, k=1) -> ResNet:
     return ResNet(11, [16, 16 * k, 32 * k, 64 * k, 128 * k], img_channels, out_dim)
 
+def resnet20(img_channels, out_dim, k=1) -> ResNet:
+    return ResNet(20, [16, 16 * k, 32 * k, 64 * k, 128 * k], img_channels, out_dim)
+
+def resnet38(img_channels, out_dim, k=1) -> ResNet:
+    return ResNet(38, [16, 16 * k, 32 * k, 64 * k, 128 * k], img_channels, out_dim)
+
+def resnet56(img_channels, out_dim, k=1) -> ResNet:
+    return ResNet(56, [16, 16 * k, 32 * k, 64 * k, 128 * k], img_channels, out_dim)
+
+def resnet110(img_channels, out_dim, k=1) -> ResNet:
+    return ResNet(110, [16, 16 * k, 32 * k, 64 * k, 128 * k], img_channels, out_dim)
+
 def create_resnet(
-    type: Literal["resnet11"],
+    type: Literal["resnet11", "resnet20", "resnet38", "resnet56", "resnet110"],
     img_channels,
     out_dim,
     k=1
 ):
-    if type == "resnet11":
-        return resnet11(img_channels, out_dim, k)
+    resnet_fns = {
+        "resnet11": resnet11,
+        "resnet20": resnet20,
+        "resnet38": resnet38,
+        "resnet56": resnet56,
+        "resnet110": resnet110
+    }
+
+    if type in resnet_fns:
+        return resnet_fns[type](img_channels, out_dim, k)
     else:
         raise ValueError(f"Unknown resnet type: {type}")
 

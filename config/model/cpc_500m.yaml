@@ -1,0 +1,24 @@
+_target_: "odyssey.lightning.models.cpc.CPCModel"
+
+tty_embedding:
+  _target_: odyssey.nn.nethack.tty_encoder.ResnetTTYEncoder
+  embedding_dim: 1024
+  char_embedding_dim: 64
+  resnet_type: "resnet56"
+
+context_embedding:
+  _target_: odyssey.nn.contrastive.context_transformer.ContextTransformer
+  input_size: ${model.tty_embedding.embedding_dim}
+  output_size: 1024
+  num_blocks: 48
+  hidden_size: 3072
+  max_trajectory_length: ${context_length}
+  num_heads: 64
+  drop_p: 0.1
+
+future_obs_predictor:
+  _target_: odyssey.nn.contrastive.linear_list.LinearList
+  in_features: ${model.context_embedding.output_size}
+  out_features: ${model.tty_embedding.embedding_dim}
+  num_linears: ${future_length}
+  bias: false

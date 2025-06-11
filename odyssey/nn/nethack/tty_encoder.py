@@ -50,11 +50,11 @@ class TTYEncoderBase(nn.Module, ABC):
             "Must provide either char_embeddings or all of tty_chars, tty_colors, tty_cursor"
 
         *S, H, W = tty_chars.shape
-        tty_chars = tty_chars.view(-1, H, W)
-        tty_colors = tty_colors.view(-1, H, W)
-        tty_cursor = tty_cursor.view(-1, 2)
+        tty_chars = tty_chars.reshape(-1, H, W)
+        tty_colors = tty_colors.reshape(-1, H, W)
+        tty_cursor = tty_cursor.reshape(-1, 2)
         X = self.forward(tty_chars, tty_colors, tty_cursor)
-        return X.view(*S, -1)
+        return X.reshape(*S, -1)
 
 class ResnetTTYEncoder(TTYEncoderBase):
     def __init__(self,
@@ -80,7 +80,16 @@ class ResnetTTYEncoder(TTYEncoderBase):
         return x
     
     def embed_tty_chars(self, tty_chars: torch.LongTensor, tty_colors: torch.LongTensor, tty_cursor: torch.LongTensor) -> torch.Tensor:
-        return self.chars_embedding(tty_chars.long(), tty_colors.long(), tty_cursor.long())
+        *S, H, W = tty_chars.shape
+        tty_chars = tty_chars.reshape(-1, H, W)
+        tty_colors = tty_colors.reshape(-1, H, W)
+        tty_cursor = tty_cursor.reshape(-1, 2)
+        X = self.chars_embedding(tty_chars.long(), tty_colors.long(), tty_cursor.long())
+        return X.reshape(*S, H, W, -1)
 
     def encode_embeddings(self, char_embeddings: torch.Tensor) -> torch.Tensor:
-        return self.resnet(char_embeddings.permute(0, 3, 1, 2))
+        *S, H, W, E = char_embeddings.shape
+        char_embeddings = char_embeddings.reshape(-1, H, W, E)
+        char_encodings = self.resnet(char_embeddings.permute(0, 3, 1, 2))
+        char_encodings = char_encodings.reshape(*S, -1)
+        return char_encodings
