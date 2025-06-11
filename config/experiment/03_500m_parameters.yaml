@@ -32,6 +32,9 @@ callbacks:
   model_checkpoint:
     # Instead of early stopping, we save more checkpoints
     save_top_k: 5
+    # NEW: monitor validation loss instead of accuracy, as the accuracy can peak while the loss still decreases (higher confidence)
+    monitor: "val_loss"
+    mode: "min"
 
 # NEW: Speedup training by using medium float precision
 float32_matmul_precision: "medium"
