@@ -21,9 +21,7 @@ logger:
 data:
   # NEW: Increase the batch size to 128
   batch_size: 128
-  num_workers: 4
-  # NEW: Prefetch factor to speed up data loading
-  prefetch_factor: 2
+  num_workers: 6
   val_dataset_seed: 42
   samples_per_trajectory: 96
   bottom_bar_censor_ratio: 0.5
@@ -37,4 +35,4 @@ callbacks:
     mode: "min"
 
 # NEW: Speedup training by using medium float precision
-float32_matmul_precision: "medium"
+float32_matmul_precision: "high"

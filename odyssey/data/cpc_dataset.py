@@ -60,12 +60,8 @@ class CPCDataset(data.IterableDataset):
         self.seed = seed
         self.transform = transform
 
-        self.valid_trajectory_keys = [
-            key
-            for key in self.data.keys()
-            if len(self.data[key]) > self.samples_per_trajectory + 1
-        ]
-        assert len(self.valid_trajectory_keys) > 0, f"No trajectories found with a length > samples_per_trajectory + 1 ({self.samples_per_trajectory + 1}). Reduce the amount of samples, as otherwise a batch would contain the same positive sample multiple times."
+        print("Changed code")
+        self.valid_trajectory_keys = list(self.data.keys())
 
         self.data_dtype = self.data[self.valid_trajectory_keys[0]].dtype
         self.data_shape = self.data[self.valid_trajectory_keys[0]].shape
@@ -115,7 +111,7 @@ class CPCDataset(data.IterableDataset):
         slices = []
 
         for key in trajectory_keys:
-            num_samples = min(self.batch_size - len(slices), self.samples_per_trajectory)
+            num_samples = min(self.batch_size - len(slices), self.samples_per_trajectory, self.data[key].shape[0] - 1)
             positive_indices = rng.choice(range(1, len(self.data[key])), num_samples, replace=False)
             offsets = rng.integers(0, np.minimum(positive_indices, self.future_length))
             ends = positive_indices - offsets
