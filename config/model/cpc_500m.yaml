@@ -11,9 +11,9 @@ context_embedding:
   input_size: ${model.tty_embedding.embedding_dim}
   output_size: 1024
   num_blocks: 48
-  hidden_size: 3072
+  hidden_size: 2048
   max_trajectory_length: ${context_length}
-  num_heads: 64
+  num_heads: 32
   drop_p: 0.1
 
 future_obs_predictor:
