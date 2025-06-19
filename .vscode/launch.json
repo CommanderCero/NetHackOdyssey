@@ -10,8 +10,18 @@
             "cwd": "${fileDirname}",
             "console": "integratedTerminal",
             "justMyCode": false,
+        },
+        {
+            "name": "Train CPC",
+            "type": "debugpy",
+            "python": "/usr/bin/python",
+            "request": "launch",
+            "program": "train_cpc.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
             "args": [
-                "experiment=02b_increase_sample_difficulty",
+                "experiment=04_50m_16bit_only",
                 "paths=default",
                 "logger.offline=True",
                 "data.num_workers=0"
