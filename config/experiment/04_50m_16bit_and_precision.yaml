@@ -23,9 +23,9 @@ logger:
 
 data:
   batch_size: 64
-  num_workers: 6
+  num_workers: 2
   val_dataset_seed: 42
-  samples_per_trajectory: 96
+  samples_per_trajectory: 48
   bottom_bar_censor_ratio: 0.5
 
 callbacks:
