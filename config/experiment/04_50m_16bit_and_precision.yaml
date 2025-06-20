@@ -19,7 +19,7 @@ trainer:
 logger:
   tags: ${tags}
   group: "cpc"
-  name: "04_50m_16bit_only"
+  name: "04_50m_16bit_and_precision"
 
 data:
   batch_size: 64

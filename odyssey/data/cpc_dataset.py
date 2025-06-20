@@ -60,7 +60,6 @@ class CPCDataset(data.IterableDataset):
         self.seed = seed
         self.transform = transform
 
-        print("Changed code")
         self.valid_trajectory_keys = list(self.data.keys())
 
         self.data_dtype = self.data[self.valid_trajectory_keys[0]].dtype
@@ -106,23 +105,29 @@ class CPCDataset(data.IterableDataset):
         The offset is used to determine the positive sample (end + offset).
         Note that end is not inclusive, meaning when offset is 0, the positive index equals end
         """
-        num_key_samples = math.ceil(self.batch_size / self.samples_per_trajectory)
-        trajectory_keys = rng.choice(self.valid_trajectory_keys, num_key_samples, replace=False)
-        slices = []
+        slices = set()
 
-        for key in trajectory_keys:
-            num_samples = min(self.batch_size - len(slices), self.samples_per_trajectory, self.data[key].shape[0] - 1)
-            positive_indices = rng.choice(range(1, len(self.data[key])), num_samples, replace=False)
+        while len(slices) < self.batch_size:
+            key = rng.choice(self.valid_trajectory_keys)
+            data_len = self.data[key].shape[0]
+
+            if data_len <= 1:
+                continue
+
+            num_needed = self.batch_size - len(slices)
+            num_samples = min(num_needed, self.samples_per_trajectory, data_len - 1)
+
+            positive_indices = rng.choice(range(1, data_len), num_samples, replace=False)
             offsets = rng.integers(0, np.minimum(positive_indices, self.future_length))
             ends = positive_indices - offsets
             starts = np.maximum(ends - self.context_length, 0)
 
-            slices.extend(
-                (key, start, end, offset)
+            slices.update(
+                (key, int(start), int(end), int(offset))
                 for start, end, offset in zip(starts, ends, offsets)
             )
 
-        return slices
+        return list(slices)[:self.batch_size]
 
 if __name__ == "__main__":
     dataset = CPCDataset(
