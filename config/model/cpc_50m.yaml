@@ -22,3 +22,11 @@ future_obs_predictor:
   out_features: ${model.tty_embedding.embedding_dim}
   num_linears: ${future_length}
   bias: false
+
+optimizer_fn:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 2e-4
+  weight_decay: 0.0
+
+compile: false

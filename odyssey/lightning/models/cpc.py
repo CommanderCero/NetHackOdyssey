@@ -42,17 +42,28 @@ class NethackCPCBatch:
             positive_indices=batch["positive_indices"],
             batch_size=(batch["padding_mask"].shape[0],)
         )
-    
+
 class CPCModel(lightning.LightningModule):
     def __init__(self,
         tty_embedding: TTYEncoderBase,
         context_embedding: ContextTransformer,
-        future_obs_predictor: LinearList
+        future_obs_predictor: LinearList,
+        optimizer_fn: torch.optim.Optimizer,
+        compile: bool=False
     ):
-        super().__init__()
+        super().__init__()        
+        
+        self.save_hyperparameters(logger=False)
+
         self.tty_embedding = tty_embedding
         self.context_embedding = context_embedding
         self.future_obs_predictor = future_obs_predictor
+
+    def setup(self, stage: str):
+        if self.hparams.compile and stage == "fit":
+            self.tty_embedding = torch.compile(self.tty_embedding)
+            self.context_embedding = torch.compile(self.context_embedding)
+            self.future_obs_predictor = torch.compile(self.future_obs_predictor)
 
     def forward(self, batch):
         batch: NethackCPCBatch = NethackCPCBatch.from_dict(batch)
@@ -97,10 +108,7 @@ class CPCModel(lightning.LightningModule):
         return {"val_loss": loss, "val_accuracy": acc}
     
     def configure_optimizers(self):
-        return torch.optim.Adam(
-            self.parameters(),
-            lr=2e-4,
-        )
+        return self.hparams.optimizer_fn(params=self.parameters())
     
     def compute_loss_and_accuracy(self, queries: torch.Tensor, positive_keys: torch.Tensor, temperature: float = 0.1):
         queries = F.normalize(queries, dim=-1)

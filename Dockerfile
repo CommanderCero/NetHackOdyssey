@@ -40,5 +40,5 @@ RUN --mount=type=cache,target=/root/.cache pip install -r requirements.txt
 
 # Install our project in developer mode
 COPY setup.py .
-COPY odyssey .
+COPY odyssey ./odyssey
 RUN pip install -e .
