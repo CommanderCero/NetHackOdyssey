@@ -6,6 +6,7 @@ tqdm
 matplotlib
 rich
 hydra-core
+opencv-python
 
 # OpenAI Gym
 nle

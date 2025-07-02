@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - override /data: cpc
-  - override /model: cpc
+  - override /model: cpc_50m
   - override /callbacks: default
   - override /trainer: gpu_16bit
   - override /paths: apocrita
@@ -10,22 +10,30 @@ defaults:
 logger:
   tags: ${tags}
   group: "cpc"
-  name: "05_50m_optimizations"
+  name: "05_50m_cosine_warm_restart"
 
 # NEW: Use AdamW optimizer with weight decay
+# NEW: Use Cosine Annealing Warm Restarts scheduler
+# NEW: Start with a learning rate of 3e-4
 # NEW: Compile the model for performance improvements
 model:
   optimizer_fn:
     _target_: torch.optim.AdamW
     _partial_: true
-    lr: 2e-4
     weight_decay: 1e-2
 
+  scheduler_fn:
+    _target_: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+    _partial_: true
+    T_0: 10
+    T_mult: 2
+    eta_min: 1e-6
+
+  lr: 3e-4
   compile: true
 
 trainer:
-  min_epochs: 10
-  max_epochs: 2000
+  max_epochs: 4000
 
 data:
   batch_size: 64

@@ -10,6 +10,7 @@ import hydra
 from omegaconf import DictConfig
 from typing import List, Dict
 
+
 @hydra.main(config_path="config", config_name="train_cpc", version_base="1.3")
 def main(cfg: DictConfig):
     if cfg.float32_matmul_precision:
@@ -23,6 +24,14 @@ def main(cfg: DictConfig):
 
     model: CPCModel = hydra.utils.instantiate(cfg.model)
     logger: Logger = hydra.utils.instantiate(cfg.logger)
+    if cfg.watch_model_frequency != 0 and isinstance(logger, lightning.pytorch.loggers.WandbLogger):
+        logger.watch(
+            model=model,
+            log="all",
+            log_freq=cfg.watch_model_frequency,
+            log_graph=True,
+        )
+
     callbacks: Dict[str, Callback] = hydra.utils.instantiate(cfg.callbacks)
     trainer: lightning.Trainer = hydra.utils.instantiate(
         cfg.trainer,

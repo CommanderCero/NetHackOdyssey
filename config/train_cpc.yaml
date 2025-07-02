@@ -22,3 +22,6 @@ float32_matmul_precision: null
 
 # Set to true to only prepare the data and not train a model
 prepare_data_only: false
+
+# Frequency to log model parameters to wandb, requires wandb logger
+watch_model_frequency: 100

@@ -26,7 +26,7 @@ future_obs_predictor:
 optimizer_fn:
   _target_: torch.optim.Adam
   _partial_: true
-  lr: 2e-4
   weight_decay: 0.0
 
+lr: 2e-4
 compile: false

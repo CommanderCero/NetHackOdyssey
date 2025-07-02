@@ -8,8 +8,7 @@ from tensordict import tensorclass
 import lightning
 from torchmetrics.functional import accuracy
 
-import hydra
-from omegaconf import DictConfig
+from typing import Optional, Callable
 
 @tensorclass
 class TTYData:
@@ -48,12 +47,17 @@ class CPCModel(lightning.LightningModule):
         tty_embedding: TTYEncoderBase,
         context_embedding: ContextTransformer,
         future_obs_predictor: LinearList,
-        optimizer_fn: torch.optim.Optimizer,
+        optimizer_fn: Callable[[], torch.optim.Optimizer],
+        scheduler_fn: Optional[Callable[[], torch.optim.lr_scheduler.LRScheduler]] = None,
+        lr: float=2e-4,
         compile: bool=False
     ):
         super().__init__()        
         
-        self.save_hyperparameters(logger=False)
+        self.save_hyperparameters(
+            logger=False,
+            ignore=["tty_embedding", "context_embedding", "future_obs_predictor"]
+        )
 
         self.tty_embedding = tty_embedding
         self.context_embedding = context_embedding
@@ -108,7 +112,23 @@ class CPCModel(lightning.LightningModule):
         return {"val_loss": loss, "val_accuracy": acc}
     
     def configure_optimizers(self):
-        return self.hparams.optimizer_fn(params=self.parameters())
+        optimizer = self.hparams.optimizer_fn(
+            params=self.parameters(),
+            lr=self.hparams.lr
+        )
+        if self.hparams.scheduler_fn is not None:
+            scheduler = self.hparams.scheduler_fn(optimizer=optimizer)
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "monitor": "val_loss",
+                    "interval": "epoch",
+                    "frequency": 1,
+                },
+            }
+
+        return optimizer
     
     def compute_loss_and_accuracy(self, queries: torch.Tensor, positive_keys: torch.Tensor, temperature: float = 0.1):
         queries = F.normalize(queries, dim=-1)
