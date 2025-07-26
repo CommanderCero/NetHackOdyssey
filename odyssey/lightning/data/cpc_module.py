@@ -7,6 +7,7 @@ from lightning import LightningDataModule
 import nle.dataset as nld
 from nle.dataset.dataset import _ttyrec_generator, TtyrecDataset
 
+import json
 import numpy as np
 import requests
 import tempfile
@@ -17,6 +18,7 @@ import random
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from pathlib import Path
+from typing import Optional
 
 NLD_NAO_BASE_URL = "https://dl.fbaipublicfiles.com/nld/nld-nao"
 NLD_NAO_SUFFIXES = [
@@ -154,9 +156,9 @@ def write_games_to_h5(game_ids, dataset: nld.TtyrecDataset, output_path, chunk_s
             ds.attrs["player_name"] = names[0]
 
 
-def _write_part(part_id, part_game_ids, dataset_path, output_dir, prefix, chunk_size, compression_type):
+def _write_part(part_id, part_game_ids, dataset_path, output_dir, chunk_size, compression_type):
     dataset = nld.TtyrecDataset("nld-nao-v0", batch_size=1, seq_length=1, dbfilename=dataset_path)
-    out_path = os.path.join(output_dir, f"{prefix}_part{part_id}.h5")
+    out_path = os.path.join(output_dir, f"part{part_id}.h5")
     write_games_to_h5(
         part_game_ids,
         dataset,
@@ -166,7 +168,7 @@ def _write_part(part_id, part_game_ids, dataset_path, output_dir, prefix, chunk_
     )
     return out_path
 
-def write_games_to_h5_parallel(game_ids, dataset, output_dir, prefix, chunk_size, compression_type, num_workers=8):
+def write_games_to_h5_parallel(game_ids, dataset, output_dir, chunk_size, compression_type, num_workers=8):
     os.makedirs(output_dir, exist_ok=True)
     dataset_path = dataset.dbfilename
     shard_ids = np.array_split(game_ids, num_workers)
@@ -179,7 +181,6 @@ def write_games_to_h5_parallel(game_ids, dataset, output_dir, prefix, chunk_size
                 shard.tolist(),
                 dataset_path,
                 output_dir,
-                prefix,
                 chunk_size,
                 compression_type
             )
@@ -205,6 +206,7 @@ class CPCDataModule(LightningDataModule):
         future_length: int = 30,
         batch_size: int = 32,
         num_test_samples: int = 50,
+        train_subset_size: Optional[int] = None,
         samples_per_trajectory: int = 10,
         num_workers: int = 0,
         nld_nao_suffixes = NLD_NAO_SUFFIXES,
@@ -217,6 +219,7 @@ class CPCDataModule(LightningDataModule):
 
     def prepare_data(self):
         os.makedirs(self.raw_data_dir, exist_ok=True)
+
         if len(os.listdir(self.raw_data_dir)) != 0:
             print(f"Data directory {self.raw_data_dir} already contains files. Skipping download.")
         else:
@@ -229,49 +232,60 @@ class CPCDataModule(LightningDataModule):
             nld.db.create(filename=self.db_file)
             nld.add_altorg_directory(path=self.raw_data_dir, name="nld-nao-v0", filename=self.db_file)
 
-        if os.path.exists(self.train_file) and os.path.exists(self.test_file):
-            print(f"Train file {self.train_file} and test file {self.test_file} already exist. Skipping HDF5 creation.")
+        if os.path.exists(self.data_file):
+            print(f"Data file {self.data_file} already exists. Skipping HDF5 creation.")
         else:
-            print(f"Creating HDF5 files {self.train_file} and {self.test_file}...")
+            print(f"Creating HDF5 file {self.data_file}...")
             dataset = nld.TtyrecDataset("nld-nao-v0", batch_size=1, seq_length=1, dbfilename=self.db_file)
             game_ids = list(dataset._gameids)
-            random.shuffle(game_ids)
-
-            test_ids = game_ids[:self.hparams.num_test_samples]
-            train_ids = game_ids[self.hparams.num_test_samples:]
 
             chunk_size = (self.hparams.future_length + self.hparams.context_length) * 2
-            
-            # Parallelize generating the train dataset
-            print(f"Generating {self.train_file}...")
-            train_parts = write_games_to_h5_parallel(
-                train_ids, dataset, os.path.join(self.hparams.data_dir, "train_parts"), "train",
-                chunk_size=chunk_size, compression_type="gzip"
+            parts = write_games_to_h5_parallel(
+                game_ids=game_ids,
+                dataset=dataset,
+                output_dir=os.path.join(self.hparams.data_dir, "train_parts"),
+                chunk_size=chunk_size,
+                compression_type="gzip"
             )
-            create_virtual_dataset(self.train_file, train_parts)
+            create_virtual_dataset(self.data_file, parts)
 
-            # Test data shouldnt be much, so we do not parallelize it
-            print(f"Generating {self.test_file}...")
-            write_games_to_h5(test_ids, dataset, self.test_file, chunk_size, "gzip")
+        if os.path.exists(self.split_file):
+            print(f"Split file {self.split_file} already exists. Skipping split creation.")
+        else:
+            print(f"Creating split file {self.split_file}...")
+            with h5py.File(self.data_file, "r") as f:
+                trajectory_keys = list(f.keys())
+
+            random.shuffle(trajectory_keys)
+            test_keys = trajectory_keys[:self.hparams.num_test_samples]
+            train_keys = trajectory_keys[self.hparams.num_test_samples:]
+
+            if self.hparams.train_subset_size:
+                train_keys = train_keys[:self.hparams.train_subset_size]
+
+            with open(self.split_file, "w") as f:
+                json.dump({"train": train_keys, "test": test_keys}, f)
 
     def setup(self, stage):
         transform = None
         if self.hparams.bottom_bar_censor_ratio:
             transform = self.censor_bottom_bar_transform
 
+        with open(self.split_file, "r") as f:
+            split = json.load(f)
+
         kwargs = {
             "batch_size": self.hparams.batch_size,
             "context_length": self.hparams.context_length,
             "future_length": self.hparams.future_length,
             "samples_per_trajectory": self.hparams.samples_per_trajectory,
-            "transform": transform
+            "transform": transform,
         }
 
-        self.train_dataset = CPCDataset(self.train_file, **kwargs)
+        self.train_dataset = CPCDataset(self.data_file, valid_trajectory_keys=split["train"], **kwargs)
 
         kwargs["seed"] = self.hparams.val_dataset_seed
-        self.val_dataset = CPCDataset(self.test_file, **kwargs)
-
+        self.val_dataset = CPCDataset(self.data_file, valid_trajectory_keys=split["test"], **kwargs)
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
@@ -315,11 +329,10 @@ class CPCDataModule(LightningDataModule):
         return os.path.join(self.hparams.data_dir, "nld_nao")
     
     @property
-    def train_file(self):
-        return os.path.join(self.hparams.data_dir, "nld_nao_train.h5")
-    
+    def data_file(self):
+        return os.path.join(self.hparams.data_dir, "nld_nao_data.h5")
+        
     @property
-    def test_file(self):
-        return os.path.join(self.hparams.data_dir, "nld_nao_test.h5")
-    
-    
+    def split_file(self):
+        suffix = f"subset{self.hparams.train_subset_size or 'full'}_test{self.hparams.num_test_samples}"
+        return os.path.join(self.hparams.data_dir, f"split_{suffix}.json")

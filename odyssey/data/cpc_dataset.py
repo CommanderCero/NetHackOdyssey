@@ -5,7 +5,7 @@ import numpy as np
 
 import h5py
 import math
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 
 def mixed_dtype_to_dict(data: np.ndarray):
     """
@@ -34,6 +34,7 @@ class CPCDataset(data.IterableDataset):
     """
     def __init__(self,
         h5py_file_path: str,
+        valid_trajectory_keys: List[str],
         batch_size: int,
         context_length: int,
         future_length: int,
@@ -60,7 +61,10 @@ class CPCDataset(data.IterableDataset):
         self.seed = seed
         self.transform = transform
 
-        self.valid_trajectory_keys = list(self.data.keys())
+        keys = self.data.keys()
+        missing_keys = set(valid_trajectory_keys) - set(keys)
+        assert len(missing_keys) == 0, f"Found {len(missing_keys)} trajectory keys that are not in the given h5py file: {missing_keys}"
+        self.valid_trajectory_keys = valid_trajectory_keys
 
         self.data_dtype = self.data[self.valid_trajectory_keys[0]].dtype
         self.data_shape = self.data[self.valid_trajectory_keys[0]].shape
