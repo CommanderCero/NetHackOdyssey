@@ -1,0 +1,10 @@
+# Dataset to overfit on a small subset of CPC data for testing purposes.
+_target_: odyssey.lightning.data.cpc_module.CPCDataModule
+data_dir: ${paths.data_dir}
+context_length: ${context_length}
+future_length: ${future_length}
+batch_size: 32
+num_test_samples: 500
+samples_per_trajectory: 10
+num_workers: 0
+train_subset_size: 1000  # Use a small subset of the training data for quick testing
