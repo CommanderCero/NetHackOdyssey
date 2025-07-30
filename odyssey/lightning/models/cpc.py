@@ -96,6 +96,19 @@ class CPCModel(lightning.LightningModule):
         positive_samples, positive_preds = self(batch)
         loss, acc = self.compute_loss_and_accuracy(positive_preds, positive_samples)
 
+        # Debugging: log the model and batch if loss is NaN or too high
+        if torch.isnan(loss) or loss >= 10:
+            import os
+            if "log_count" not in self.__dict__:
+                self.log_count = 0
+            self.log_count += 1
+            log_dir = os.path.join(self.logger.save_dir, f"debug_epoch{self.current_epoch}_step{self.global_step}")
+            os.makedirs(log_dir, exist_ok=True)
+
+            if self.log_count < 5:
+                torch.save(self.state_dict(), os.path.join(log_dir, "model.pt"))
+                torch.save(batch, os.path.join(log_dir, "batch.pt"))
+
         self.log("loss", loss, prog_bar=True)
         self.log("accuracy", acc, prog_bar=True)
 
