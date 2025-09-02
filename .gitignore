@@ -1,8 +1,17 @@
-# My Stuff
-cache/
-*.env
+# Devcontainer environment variables
+/.devcontainer/devcontainer.env
+
+# Data
 /data/
-logs/
+
+# Mac OS-specific storage files
+.DS_Store
+
+# vim
+*.swp
+*.swo
+
+## https://github.com/github/gitignore/blob/e8554d85bf62e38d6db966a50d2064ac025fd82a/Python.gitignore
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -74,8 +83,8 @@ instance/
 # Scrapy stuff:
 .scrapy
 
-# Sphinx documentation
-docs/_build/
+# MkDocs documentation
+docs/site/
 
 # PyBuilder
 .pybuilder/
@@ -122,6 +131,11 @@ ipython_config.py
 .pdm.toml
 .pdm-python
 .pdm-build/
+
+# pixi
+#   pixi.lock should be committed to version control for reproducibility
+#   .pixi/ contains the environments and should not be committed
+.pixi/
 
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
 __pypackages__/
@@ -172,6 +186,9 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Ruff stuff:
+.ruff_cache/
 
 # PyPI configuration file
 .pypirc

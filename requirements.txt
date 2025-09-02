@@ -1,3 +1,6 @@
+# Setup
+cookiecutter-data-science
+
 # Utils
 numpy
 pandas

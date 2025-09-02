@@ -1,0 +1,1 @@
+from odyssey import config  # noqa: F401
