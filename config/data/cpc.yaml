@@ -1,8 +1,0 @@
-_target_: odyssey.lightning.data.cpc_module.CPCDataModule
-data_dir: ${paths.data_dir}
-context_length: ${context_length}
-future_length: ${future_length}
-batch_size: 32
-num_test_samples: 500
-samples_per_trajectory: 10
-num_workers: 0
