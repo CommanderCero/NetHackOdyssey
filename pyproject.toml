@@ -5,7 +5,7 @@ build-backend = "flit_core.buildapi"
 [project]
 name = "odyssey"
 version = "0.0.1"
-description = "Embarking on a quest to conquer NetHack wi"
+description = "Embarking on a quest to conquer NetHack with Reinforcement Learning."
 authors = [
   { name = "Dominik Jeurissen" },
 ]
@@ -16,14 +16,40 @@ classifiers = [
     "License :: OSI Approved :: MIT License"
 ]
 dependencies = [
-    "loguru",
-    "pip",
+    # Setup / Dev
     "pytest",
     "python-dotenv",
     "ruff",
-    "tqdm",
+    "cookiecutter-data-science",
+
+    # Utils
+    "loguru",
     "typer",
+    "numpy",
+    "pandas",
+    "ipykernel",
+    "tqdm",
+    "matplotlib",
+    "rich",
+    "hydra-core",
+    "opencv-python",
+
+    # OpenAI Gym / NLE
+    "nle",
+    "gymnasium<1.0.0",
+
+    # Machine Learning
+    "torch",
+    "torchvision",
+    "lightning",
+    "torchrl",
+    "av",  # for video recording
+    "sentence-transformers==3.0.0",
+    "h5py",
+    "wandb",
+    "captum"
 ]
+
 requires-python = "~=3.10.0"
 
 

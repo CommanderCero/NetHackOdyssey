@@ -1,24 +1,18 @@
+import os
 from pathlib import Path
-
-from dotenv import load_dotenv
 from loguru import logger
-
-# Load environment variables from .env file if it exists
-load_dotenv()
 
 # Paths
 PROJ_ROOT = Path(__file__).resolve().parents[1]
-logger.info(f"PROJ_ROOT path is: {PROJ_ROOT}")
+STORAGE_ROOT_PATH = Path(os.getenv("ODYSSEY_STORAGE_PATH") or PROJ_ROOT).resolve()
 
-DATA_DIR = PROJ_ROOT / "data"
+DATA_DIR = STORAGE_ROOT_PATH / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 INTERIM_DATA_DIR = DATA_DIR / "interim"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
-EXTERNAL_DATA_DIR = DATA_DIR / "external"
 
-MODELS_DIR = PROJ_ROOT / "models"
-
-REPORTS_DIR = PROJ_ROOT / "reports"
+MODELS_DIR = STORAGE_ROOT_PATH / "models"
+REPORTS_DIR = STORAGE_ROOT_PATH / "reports"
 FIGURES_DIR = REPORTS_DIR / "figures"
 
 # If tqdm is installed, configure loguru with tqdm.write

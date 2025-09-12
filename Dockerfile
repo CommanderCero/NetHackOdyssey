@@ -34,11 +34,9 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -y install \
 #    libsm6 \
 #    libxext6
 
-# Install requirements
-COPY requirements.txt .
-RUN --mount=type=cache,target=/root/.cache pip install -r requirements.txt
-
 # Install our project in developer mode
-# COPY setup.py .
-# COPY odyssey ./odyssey
-# RUN pip install -e .
+COPY pyproject.toml .
+COPY odyssey ./odyssey
+COPY README.md .
+COPY LICENSE .
+RUN --mount=type=cache,target=/root/.cache pip install -e .
